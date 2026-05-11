@@ -186,6 +186,10 @@ tbody tr:hover .sticky-col{background:#1e3048;}
   </div>
   <div class="topbar-right">
     <div class="data-info" id="data-info">No data loaded</div>
+    <button class="upload-btn" id="export-btn" onclick="exportToExcel()" style="display:none;background:#27ae60;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Export Report (Excel)
+    </button>
     <button class="upload-btn" onclick="document.getElementById('file-input').click()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
       Upload Daily Data
@@ -723,6 +727,7 @@ function initAllTabs(){
   renderOffenders();
   renderZones();
   renderTrends();
+  showExportBtn();
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1214,6 +1219,256 @@ function switchTab(name, el){
   document.getElementById(`tab-${name}`).classList.add('active');
   el.classList.add('active');
 }
+
+// ═══════════════════════════════════════════════════════
+// EXPORT TO EXCEL
+// ═══════════════════════════════════════════════════════
+function exportToExcel(){
+  if(!allData.length){ showToast('No data to export','error'); return; }
+  showToast('Building Excel report…','success');
+
+  const wb = XLSX.utils.book_new();
+
+  // ── helpers ──────────────────────────────────────────
+  const pctV = (n,d) => d===0?0:Math.round(n/d*1000)/10;
+  const dates = [...new Set(allData.map(r=>r.date))].sort();
+  const zones  = [...new Set(allData.map(r=>r.zone))].sort();
+  const active = allData.filter(r=>r.active);
+
+  // Date label
+  const dlabel = d => new Date(d+'T00:00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
+  const period = dates.length===1 ? dlabel(dates[0]) : `${dlabel(dates[0])} – ${dlabel(dates[dates.length-1])}`;
+
+  // Style helpers — openpyxl-style cell objects for SheetJS
+  function hdr(v){ return v; }
+
+  // ── SHEET 1: OVERVIEW KPIs ───────────────────────────
+  const n = active.length;
+  const roster = allData.length;
+  const notCI   = allData.filter(r=>!r.active).length;
+  const lCI930  = active.filter(r=>r.off_lateCI_930).length;
+  const lCI10   = active.filter(r=>r.off_lateCI_10).length;
+  const lV      = active.filter(r=>r.off_lowVisits).length;
+  const zL      = active.filter(r=>r.off_zeroLeads).length;
+  const aCO     = active.filter(r=>r.off_autoCheckout).length;
+  const lFV10   = active.filter(r=>r.off_lateFV_10).length;
+  const lFV1030 = active.filter(r=>r.off_lateFV_1030).length;
+  const lAct    = active.filter(r=>r.off_lowActivity).length;
+
+  const tiMap = {};
+  allData.forEach(r=>{
+    if(!tiMap[r.name]) tiMap[r.name]={active:0,offenses:0};
+    if(r.active){ tiMap[r.name].active++; tiMap[r.name].offenses+=r.offenseCount; }
+  });
+  const serial = Object.values(tiMap).filter(t=>t.active>0 && pctV(t.offenses,t.active*6)>=50).length;
+  const totalTIs = Object.keys(tiMap).length;
+
+  const ov = [
+    [`TI HYGIENE TRACKER — OVERVIEW REPORT`],
+    [`Period: ${period}`],
+    [],
+    ['METRIC','COUNT','TOTAL BASE','%'],
+    ['Total TIs in Roster', roster, roster, '100%'],
+    ['Checked-in TIs', n, roster, pctV(n,roster)+'%'],
+    ['Not Checked-in (Absent/Leave)', notCI, roster, pctV(notCI,roster)+'%'],
+    [],
+    ['OFFENSE','OFFENDERS','CHECKED-IN TIs','%'],
+    ['Late Check-in (After 9:30 AM)', lCI930, n, pctV(lCI930,n)+'%'],
+    ['Late Check-in (After 10:00 AM)', lCI10, n, pctV(lCI10,n)+'%'],
+    ['Low Visits (< 5/day)', lV, n, pctV(lV,n)+'%'],
+    ['Zero Leads', zL, n, pctV(zL,n)+'%'],
+    ['Auto Checkout (No manual checkout)', aCO, n, pctV(aCO,n)+'%'],
+    ['Late First Visit (After 10:00 AM)', lFV10, n, pctV(lFV10,n)+'%'],
+    ['Late First Visit (After 10:30 AM)', lFV1030, n, pctV(lFV1030,n)+'%'],
+    ['Low Activity (< 5 hrs/day)', lAct, n, pctV(lAct,n)+'%'],
+    [],
+    ['Serial Offenders (≥50% offense rate)', serial, totalTIs, pctV(serial,totalTIs)+'%'],
+  ];
+  const ws1 = XLSX.utils.aoa_to_sheet(ov);
+  ws1['!cols'] = [{wch:40},{wch:14},{wch:16},{wch:10}];
+  XLSX.utils.book_append_sheet(wb, ws1, '1. Overview');
+
+  // ── SHEET 2: DAY-WISE BREAKDOWN ──────────────────────
+  const dw = [['Date','Zone','Total Roster','Checked-in','Not Checked-in','TIs w/ ≥1 Issue',
+    'Late CI (After 10)','Low Visits','Zero Leads','Auto Checkout','Late 1st Visit (After 10:30)','Low Activity','Offense Rate %']];
+  dates.forEach(d=>{
+    zones.forEach(z=>{
+      const dayZone = allData.filter(r=>r.date===d && r.zone===z);
+      if(!dayZone.length) return;
+      const act = dayZone.filter(r=>r.active);
+      const nn = act.length;
+      const notci = dayZone.filter(r=>!r.active).length;
+      const lci  = act.filter(r=>r.off_lateCI_10).length;
+      const lv   = act.filter(r=>r.off_lowVisits).length;
+      const zl   = act.filter(r=>r.off_zeroLeads).length;
+      const aco  = act.filter(r=>r.off_autoCheckout).length;
+      const lfv  = act.filter(r=>r.off_lateFV_1030).length;
+      const la   = act.filter(r=>r.off_lowActivity).length;
+      const wi   = act.filter(r=>r.offenseCount>0).length;
+      const rate = pctV(lci+lv+zl+aco+lfv+la, nn*6);
+      dw.push([dlabel(d), z, dayZone.length, nn, notci, wi, lci, lv, zl, aco, lfv, la, rate+'%']);
+    });
+  });
+  const ws2 = XLSX.utils.aoa_to_sheet(dw);
+  ws2['!cols'] = [{wch:16},{wch:12},{wch:13},{wch:12},{wch:15},{wch:16},{wch:16},{wch:12},{wch:12},{wch:14},{wch:22},{wch:14},{wch:14}];
+  XLSX.utils.book_append_sheet(wb, ws2, '2. Daily Breakdown');
+
+  // ── SHEET 3: OFFENDERS ───────────────────────────────
+  const offRows = [['#','TI Name','Zone','Branch','Days Active','Days Absent',
+    'Late Check-in','Low Visits','Zero Leads','Auto Checkout','Late 1st Visit','Low Activity',
+    'Total Offenses','Offense Rate %','Classification']];
+
+  const tiStats = Object.entries(
+    allData.reduce((acc,r)=>{
+      if(!acc[r.name]) acc[r.name]={name:r.name,zone:r.zone,branch:r.branch,
+        active:0,absent:0,lci:0,lv:0,zl:0,aco:0,lfv:0,la:0,total:0};
+      const t=acc[r.name];
+      if(r.active){ t.active++; if(r.off_lateCI_10)t.lci++; if(r.off_lowVisits)t.lv++;
+        if(r.off_zeroLeads)t.zl++; if(r.off_autoCheckout)t.aco++;
+        if(r.off_lateFV_1030)t.lfv++; if(r.off_lowActivity)t.la++; t.total+=r.offenseCount; }
+      else t.absent++;
+      return acc;
+    },{})
+  ).map(([,t])=>({...t, rate:pctV(t.total,t.active*6)}))
+   .sort((a,b)=>b.rate-a.rate);
+
+  tiStats.forEach((t,i)=>{
+    const cls = t.rate>=60?'🔴 High Risk': t.rate>=35?'🟡 Needs Attention':'🟢 Acceptable';
+    offRows.push([i+1, t.name, t.zone, t.branch, t.active, t.absent,
+      t.lci, t.lv, t.zl, t.aco, t.lfv, t.la, t.total, t.rate+'%', cls]);
+  });
+  const ws3 = XLSX.utils.aoa_to_sheet(offRows);
+  ws3['!cols'] = [{wch:4},{wch:28},{wch:12},{wch:18},{wch:12},{wch:12},
+    {wch:13},{wch:12},{wch:12},{wch:14},{wch:14},{wch:14},{wch:14},{wch:14},{wch:18}];
+  XLSX.utils.book_append_sheet(wb, ws3, '3. Offenders');
+
+  // ── SHEET 4: ZONE BREAKDOWN ──────────────────────────
+  const zoneRows = [['Zone','Total Check-ins','Not Checked-in',
+    'Late CI (9:30)','Late CI (10AM)','% Late CI',
+    'Low Visits','% Low Visits',
+    'Zero Leads','% Zero Leads',
+    'Auto Checkout','% Auto CO',
+    'Late FV (10AM)','Late FV (10:30)','% Late FV',
+    'Low Activity','% Low Activity',
+    'Overall Offense Rate %']];
+
+  zones.forEach(z=>{
+    const zd = allData.filter(r=>r.zone===z);
+    const za = zd.filter(r=>r.active);
+    const zn = za.length;
+    const znci = zd.filter(r=>!r.active).length;
+    const zlci930 = za.filter(r=>r.off_lateCI_930).length;
+    const zlci10  = za.filter(r=>r.off_lateCI_10).length;
+    const zlv  = za.filter(r=>r.off_lowVisits).length;
+    const zzl  = za.filter(r=>r.off_zeroLeads).length;
+    const zaco = za.filter(r=>r.off_autoCheckout).length;
+    const zlfv10  = za.filter(r=>r.off_lateFV_10).length;
+    const zlfv1030= za.filter(r=>r.off_lateFV_1030).length;
+    const zla  = za.filter(r=>r.off_lowActivity).length;
+    const rate = pctV(zlci10+zlv+zzl+zaco+zlfv1030+zla, zn*6);
+    zoneRows.push([z, zn, znci,
+      zlci930, zlci10, pctV(zlci10,zn)+'%',
+      zlv, pctV(zlv,zn)+'%',
+      zzl, pctV(zzl,zn)+'%',
+      zaco, pctV(zaco,zn)+'%',
+      zlfv10, zlfv1030, pctV(zlfv1030,zn)+'%',
+      zla, pctV(zla,zn)+'%',
+      rate+'%']);
+  });
+  const ws4 = XLSX.utils.aoa_to_sheet(zoneRows);
+  ws4['!cols'] = [{wch:12},{wch:14},{wch:14},{wch:13},{wch:13},{wch:11},
+    {wch:12},{wch:11},{wch:12},{wch:11},{wch:14},{wch:11},
+    {wch:14},{wch:14},{wch:11},{wch:14},{wch:14},{wch:18}];
+  XLSX.utils.book_append_sheet(wb, ws4, '4. Zone Breakdown');
+
+  // ── SHEET 5: BRANCH BREAKDOWN ────────────────────────
+  const branchMap = {};
+  allData.forEach(r=>{
+    const key=`${r.zone}||${r.branch}`;
+    if(!branchMap[key]) branchMap[key]={zone:r.zone,branch:r.branch,tis:new Set(),
+      total:0,active:0,notCI:0,lci:0,lv:0,zl:0,aco:0,lfv:0,la:0};
+    const b=branchMap[key];
+    b.tis.add(r.name); b.total++;
+    if(r.active){ b.active++; if(r.off_lateCI_10)b.lci++; if(r.off_lowVisits)b.lv++;
+      if(r.off_zeroLeads)b.zl++; if(r.off_autoCheckout)b.aco++;
+      if(r.off_lateFV_1030)b.lfv++; if(r.off_lowActivity)b.la++; }
+    else b.notCI++;
+  });
+  const branchRows = [['Zone','Branch','Unique TIs','Total Check-ins','Not Checked-in',
+    'Late CI','% Late CI','Low Visits','% Low Visits','Zero Leads','% Zero Leads',
+    'Auto Checkout','% Auto CO','Late 1st Visit','% Late FV','Low Activity','% Low Activity',
+    'Offense Rate %']];
+  Object.values(branchMap)
+    .sort((a,b)=>a.zone.localeCompare(b.zone)||b.active-a.active)
+    .forEach(b=>{
+      const nn=b.active||1;
+      const rate=pctV(b.lci+b.lv+b.zl+b.aco+b.lfv+b.la,nn*6);
+      branchRows.push([b.zone, b.branch, b.tis.size, b.active, b.notCI,
+        b.lci, pctV(b.lci,nn)+'%', b.lv, pctV(b.lv,nn)+'%',
+        b.zl, pctV(b.zl,nn)+'%', b.aco, pctV(b.aco,nn)+'%',
+        b.lfv, pctV(b.lfv,nn)+'%', b.la, pctV(b.la,nn)+'%', rate+'%']);
+    });
+  const ws5 = XLSX.utils.aoa_to_sheet(branchRows);
+  ws5['!cols'] = [{wch:12},{wch:20},{wch:11},{wch:14},{wch:14},
+    {wch:10},{wch:10},{wch:12},{wch:12},{wch:12},{wch:12},
+    {wch:14},{wch:12},{wch:14},{wch:12},{wch:14},{wch:14},{wch:14}];
+  XLSX.utils.book_append_sheet(wb, ws5, '5. Branch Breakdown');
+
+  // ── SHEET 6: SERIAL OFFENDERS (weekly/monthly view) ──
+  const serialRows = [['#','TI Name','Zone','Branch','Days Active','Total Offenses',
+    'Late CI','Low Visits','Zero Leads','Auto CO','Late FV','Low Activity',
+    'Offense Rate %','Worst Offense','Action Required']];
+  const serials = tiStats.filter(t=>t.rate>=50).sort((a,b)=>b.rate-a.rate);
+  serials.forEach((t,i)=>{
+    const cats = [['Late CI',t.lci],['Low Visits',t.lv],['Zero Leads',t.zl],
+                  ['Auto CO',t.aco],['Late FV',t.lfv],['Low Activity',t.la]];
+    const worst = cats.sort((a,b)=>b[1]-a[1])[0];
+    serialRows.push([i+1, t.name, t.zone, t.branch, t.active, t.total,
+      t.lci, t.lv, t.zl, t.aco, t.lfv, t.la,
+      t.rate+'%', `${worst[0]} (${worst[1]}x)`,
+      t.rate>=70?'Immediate Coaching Required':'Performance Discussion']);
+  });
+  const ws6 = XLSX.utils.aoa_to_sheet(serialRows);
+  ws6['!cols'] = [{wch:4},{wch:28},{wch:12},{wch:18},{wch:12},{wch:14},
+    {wch:10},{wch:12},{wch:12},{wch:10},{wch:10},{wch:14},
+    {wch:14},{wch:20},{wch:26}];
+  XLSX.utils.book_append_sheet(wb, ws6, '6. Serial Offenders');
+
+  // ── SHEET 7: DAY-WISE TREND ──────────────────────────
+  const trendRows = [['Date','Active TIs','% Not CI','% Late CI','% Low Visits',
+    '% Zero Leads','% Auto CO','% Late FV','% Low Activity','Overall Offense Rate %']];
+  dates.forEach(d=>{
+    const dayD = allData.filter(r=>r.date===d);
+    const act  = dayD.filter(r=>r.active);
+    const nn   = act.length;
+    const notci= dayD.filter(r=>!r.active).length;
+    const lci  = act.filter(r=>r.off_lateCI_10).length;
+    const lv   = act.filter(r=>r.off_lowVisits).length;
+    const zl   = act.filter(r=>r.off_zeroLeads).length;
+    const aco  = act.filter(r=>r.off_autoCheckout).length;
+    const lfv  = act.filter(r=>r.off_lateFV_1030).length;
+    const la   = act.filter(r=>r.off_lowActivity).length;
+    const rate = pctV(lci+lv+zl+aco+lfv+la, nn*6);
+    trendRows.push([dlabel(d), nn,
+      pctV(notci,dayD.length)+'%', pctV(lci,nn)+'%', pctV(lv,nn)+'%',
+      pctV(zl,nn)+'%', pctV(aco,nn)+'%', pctV(lfv,nn)+'%',
+      pctV(la,nn)+'%', rate+'%']);
+  });
+  const ws7 = XLSX.utils.aoa_to_sheet(trendRows);
+  ws7['!cols'] = [{wch:16},{wch:12},{wch:12},{wch:12},{wch:14},
+    {wch:13},{wch:12},{wch:12},{wch:15},{wch:20}];
+  XLSX.utils.book_append_sheet(wb, ws7, '7. Trend');
+
+  // ── Generate filename with date range ────────────────
+  const safePeriod = period.replace(/[^a-zA-Z0-9\- ]/g,'').replace(/ /g,'_');
+  const filename = `TI_Hygiene_Report_${safePeriod}.xlsx`;
+
+  XLSX.writeFile(wb, filename);
+  showToast(`✓ Excel report downloaded: ${filename}`,'success');
+}
+
+// Show export button once data is loaded (called inside initAllTabs)
+function showExportBtn(){ document.getElementById('export-btn').style.display='flex'; }
 
 // Drag-over upload
 document.addEventListener('dragover',e=>{e.preventDefault();document.querySelectorAll('.upload-zone').forEach(z=>z.classList.add('drag-over'));});
