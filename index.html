@@ -1,0 +1,1233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TI Hygiene Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --navy: #0f1f2e;
+  --navy2: #162436;
+  --navy3: #1e3048;
+  --teal: #00b4a0;
+  --teal2: #00d4bc;
+  --red: #e74c3c;
+  --orange: #f39c12;
+  --green: #27ae60;
+  --blue: #2980b9;
+  --text: #e8f0f7;
+  --text2: #8fa8bf;
+  --text3: #5a7a94;
+  --border: rgba(255,255,255,0.08);
+  --card: rgba(255,255,255,0.04);
+  --card-hover: rgba(255,255,255,0.08);
+  --shadow: 0 4px 24px rgba(0,0,0,0.3);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'DM Sans',sans-serif;background:var(--navy);color:var(--text);min-height:100vh;overflow-x:hidden;}
+
+/* TOP BAR */
+.topbar{background:var(--navy2);border-bottom:1px solid var(--border);padding:0 28px;display:flex;align-items:center;justify-content:space-between;height:60px;position:sticky;top:0;z-index:100;}
+.logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:17px;letter-spacing:-.3px;}
+.logo-dot{width:10px;height:10px;background:var(--teal);border-radius:50%;}
+.topbar-right{display:flex;align-items:center;gap:14px;}
+.upload-btn{background:var(--teal);color:var(--navy);font-family:'DM Sans',sans-serif;font-weight:600;font-size:13px;padding:8px 18px;border:none;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:8px;transition:all .2s;}
+.upload-btn:hover{background:var(--teal2);transform:translateY(-1px);}
+.upload-btn svg{width:15px;height:15px;}
+#file-input{display:none;}
+.data-info{font-size:12px;color:var(--text2);font-family:'DM Mono',monospace;}
+
+/* NAV TABS */
+.tabs{display:flex;gap:2px;background:var(--navy2);padding:0 28px;border-bottom:1px solid var(--border);}
+.tab{padding:14px 20px;font-size:13px;font-weight:500;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;transition:all .2s;white-space:nowrap;}
+.tab:hover{color:var(--text);}
+.tab.active{color:var(--teal);border-bottom-color:var(--teal);}
+
+/* MAIN */
+.main{padding:24px 28px;max-width:1600px;}
+.tab-content{display:none;}
+.tab-content.active{display:block;}
+
+/* UPLOAD ZONE */
+.upload-zone{border:2px dashed var(--border);border-radius:16px;padding:60px;text-align:center;cursor:pointer;transition:all .3s;margin-bottom:24px;}
+.upload-zone:hover,.upload-zone.drag-over{border-color:var(--teal);background:rgba(0,180,160,0.05);}
+.upload-zone svg{width:48px;height:48px;color:var(--text3);margin-bottom:16px;}
+.upload-zone h3{font-size:18px;font-weight:600;margin-bottom:8px;}
+.upload-zone p{font-size:13px;color:var(--text2);}
+
+/* DATE FILTER */
+.filter-bar{display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap;}
+.filter-label{font-size:12px;color:var(--text2);font-weight:500;text-transform:uppercase;letter-spacing:.5px;}
+.date-pills{display:flex;gap:6px;flex-wrap:wrap;}
+.date-pill{padding:5px 12px;border-radius:20px;border:1px solid var(--border);font-size:12px;color:var(--text2);cursor:pointer;transition:all .2s;background:transparent;}
+.date-pill:hover{border-color:var(--teal);color:var(--teal);}
+.date-pill.active{background:var(--teal);border-color:var(--teal);color:var(--navy);font-weight:600;}
+
+/* KPI TILES */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;margin-bottom:28px;}
+.kpi-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;position:relative;overflow:hidden;transition:all .25s;}
+.kpi-card:hover{background:var(--card-hover);transform:translateY(-2px);box-shadow:var(--shadow);}
+.kpi-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--accent-color,var(--teal));}
+.kpi-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--text2);margin-bottom:10px;}
+.kpi-value{font-size:32px;font-weight:700;line-height:1;margin-bottom:4px;color:var(--accent-color,var(--text));}
+.kpi-sub{font-size:12px;color:var(--text2);}
+.kpi-sub span{color:var(--accent-color,var(--teal));font-weight:600;}
+
+/* SECTION HEADER */
+.section-hdr{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text2);margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+.section-hdr::after{content:'';flex:1;height:1px;background:var(--border);}
+
+/* TABLES */
+.table-wrap{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:24px;}
+table{width:100%;border-collapse:collapse;font-size:12.5px;}
+thead th{background:var(--navy3);padding:11px 14px;text-align:left;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2);white-space:nowrap;border-bottom:1px solid var(--border);}
+thead th.num{text-align:right;}
+tbody tr{border-bottom:1px solid var(--border);transition:background .15s;}
+tbody tr:last-child{border-bottom:none;}
+tbody tr:hover{background:rgba(255,255,255,0.04);}
+td{padding:10px 14px;color:var(--text);}
+td.num{text-align:right;font-family:'DM Mono',monospace;}
+td.zone-cell{font-weight:600;color:var(--teal);}
+
+/* BADGE / PILL */
+.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;}
+.badge-red{background:rgba(231,76,60,.15);color:#e74c3c;}
+.badge-orange{background:rgba(243,156,18,.15);color:#f39c12;}
+.badge-green{background:rgba(39,174,96,.15);color:#27ae60;}
+.badge-blue{background:rgba(41,128,185,.15);color:#2980b9;}
+.badge-grey{background:rgba(255,255,255,.06);color:var(--text2);}
+
+/* RATE BAR */
+.rate-bar{display:flex;align-items:center;gap:8px;}
+.rate-track{flex:1;height:5px;background:rgba(255,255,255,.08);border-radius:3px;min-width:60px;}
+.rate-fill{height:5px;border-radius:3px;transition:width .4s;}
+
+/* SEARCH / FILTER ROW */
+.search-row{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;}
+.search-input{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px 14px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;width:240px;outline:none;transition:border .2s;}
+.search-input:focus{border-color:var(--teal);}
+.search-input::placeholder{color:var(--text3);}
+select.select-filter{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;cursor:pointer;}
+select.select-filter option{background:var(--navy2);}
+
+/* SORTABLE */
+th.sortable{cursor:pointer;user-select:none;}
+th.sortable:hover{color:var(--text);}
+th.sortable::after{content:' ↕';opacity:.4;font-size:10px;}
+th.sort-asc::after{content:' ↑';opacity:1;color:var(--teal);}
+th.sort-desc::after{content:' ↓';opacity:1;color:var(--teal);}
+
+/* WEEKLY/MONTHLY CHARTS */
+.trend-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;}
+.chart-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;}
+.chart-title{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text2);margin-bottom:16px;}
+.bar-chart{display:flex;flex-direction:column;gap:10px;}
+.bar-row{display:flex;align-items:center;gap:10px;}
+.bar-name{font-size:11px;color:var(--text2);width:80px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.bar-track{flex:1;height:22px;background:rgba(255,255,255,.05);border-radius:4px;position:relative;overflow:hidden;}
+.bar-fill{height:100%;border-radius:4px;display:flex;align-items:center;padding-left:8px;font-size:11px;font-weight:600;color:rgba(255,255,255,.9);transition:width .6s cubic-bezier(.4,0,.2,1);}
+.bar-val{font-size:11px;font-family:'DM Mono',monospace;color:var(--text2);width:40px;}
+
+/* EMPTY STATE */
+.empty{text-align:center;padding:80px 20px;}
+.empty svg{width:56px;height:56px;color:var(--text3);margin-bottom:16px;}
+.empty h3{font-size:17px;font-weight:600;margin-bottom:8px;}
+.empty p{font-size:13px;color:var(--text2);max-width:380px;margin:0 auto;}
+
+/* OFFENSE SUMMARY TABLE */
+.offense-row td:first-child{color:var(--text2);font-weight:500;}
+
+/* PERIOD TOGGLE */
+.period-toggle{display:flex;background:var(--navy3);border-radius:8px;padding:3px;gap:2px;}
+.period-btn{padding:6px 16px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:none;background:transparent;color:var(--text2);font-family:'DM Sans',sans-serif;transition:all .2s;}
+.period-btn.active{background:var(--teal);color:var(--navy);}
+
+/* RESPONSIVE */
+@media(max-width:768px){
+  .main{padding:16px;}
+  .kpi-grid{grid-template-columns:repeat(2,1fr);}
+  .trend-grid{grid-template-columns:1fr;}
+  .tabs{gap:0;overflow-x:auto;}
+  .tab{padding:12px 14px;font-size:12px;}
+}
+
+.no-data-row td{text-align:center;color:var(--text3);padding:30px;}
+.highlight-red{color:var(--red);}
+.highlight-orange{color:var(--orange);}
+.highlight-green{color:var(--green);}
+
+/* Scrollable table */
+.table-scroll{overflow-x:auto;}
+
+/* Sticky first col */
+.sticky-col{position:sticky;left:0;background:var(--navy2);z-index:1;}
+tbody tr:hover .sticky-col{background:#1e3048;}
+
+.summary-stat{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;}
+.summary-stat:last-child{border-bottom:none;}
+.summary-stat .lbl{color:var(--text2);}
+.summary-stat .val{font-weight:600;font-family:'DM Mono',monospace;}
+
+/* Toast */
+.toast{position:fixed;bottom:24px;right:24px;background:var(--navy3);border:1px solid var(--border);border-radius:10px;padding:12px 20px;font-size:13px;z-index:999;opacity:0;transform:translateY(10px);transition:all .3s;pointer-events:none;}
+.toast.show{opacity:1;transform:translateY(0);}
+.toast.success{border-color:var(--teal);color:var(--teal);}
+.toast.error{border-color:var(--red);color:var(--red);}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-dot"></div>
+    TI Hygiene Tracker
+  </div>
+  <div class="topbar-right">
+    <div class="data-info" id="data-info">No data loaded</div>
+    <button class="upload-btn" onclick="document.getElementById('file-input').click()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Upload Daily Data
+    </button>
+    <input type="file" id="file-input" accept=".xlsx,.xls" onchange="handleFileUpload(event)">
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('overview',this)">📊 Overview</div>
+  <div class="tab" onclick="switchTab('daily',this)">📅 Daily Breakdown</div>
+  <div class="tab" onclick="switchTab('offenders',this)">🚨 Offenders</div>
+  <div class="tab" onclick="switchTab('zones',this)">🌍 Zone & Branch</div>
+  <div class="tab" onclick="switchTab('trends',this)">📈 Weekly / Monthly</div>
+</div>
+
+<div class="main">
+
+  <!-- OVERVIEW TAB -->
+  <div id="tab-overview" class="tab-content active">
+    <div id="overview-empty" class="upload-zone" onclick="document.getElementById('file-input').click()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <h3>Upload your TI data to get started</h3>
+      <p>Supports .xlsx files. Data should include Date, Zone, Branch, Name, CheckinTime, Visits, Leads created, First Visit Time, Activity Hours and Checkout Flag columns.</p>
+    </div>
+    <div id="overview-content" style="display:none">
+      <div class="filter-bar">
+        <span class="filter-label">Date</span>
+        <div class="date-pills" id="date-pills-overview"></div>
+      </div>
+      <div class="kpi-grid" id="kpi-grid"></div>
+      <div class="section-hdr">Offense Rate by Category</div>
+      <div class="table-wrap table-scroll">
+        <table id="offense-table">
+          <thead><tr>
+            <th>Offense</th>
+            <th class="num">Checked-in TIs</th>
+            <th class="num">Offenders</th>
+            <th class="num">% of Checked-in</th>
+            <th>Impact</th>
+          </tr></thead>
+          <tbody id="offense-tbody"></tbody>
+        </table>
+      </div>
+      <div class="section-hdr">Zone-wise Summary</div>
+      <div class="table-wrap table-scroll">
+        <table id="zone-summary-table">
+          <thead><tr>
+            <th>Zone</th>
+            <th class="num">Check-ins</th>
+            <th class="num">Not Checked-in</th>
+            <th class="num">Late CI</th>
+            <th class="num">Low Visits</th>
+            <th class="num">Zero Leads</th>
+            <th class="num">Auto CO</th>
+            <th class="num">Late FV</th>
+            <th class="num">Low Activity</th>
+            <th class="num">Offense Rate</th>
+          </tr></thead>
+          <tbody id="zone-summary-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- DAILY BREAKDOWN TAB -->
+  <div id="tab-daily" class="tab-content">
+    <div id="daily-empty" class="empty">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      <h3>No data loaded</h3><p>Upload a file to see daily breakdown.</p>
+    </div>
+    <div id="daily-content" style="display:none">
+      <div class="filter-bar">
+        <span class="filter-label">Date</span>
+        <div class="date-pills" id="date-pills-daily"></div>
+        <span class="filter-label" style="margin-left:8px">Zone</span>
+        <select class="select-filter" id="daily-zone-filter" onchange="renderDaily()">
+          <option value="all">All Zones</option>
+        </select>
+      </div>
+      <div class="table-wrap table-scroll">
+        <table id="daily-table">
+          <thead><tr>
+            <th class="sortable" onclick="sortTable('daily-tbody',0)">Date</th>
+            <th class="sortable" onclick="sortTable('daily-tbody',1)">Zone</th>
+            <th class="num sortable" onclick="sortTable('daily-tbody',2)">Total Roster</th>
+            <th class="num sortable" onclick="sortTable('daily-tbody',3)">Checked-in</th>
+            <th class="num sortable" onclick="sortTable('daily-tbody',4)">Not Checked-in</th>
+            <th class="num sortable" onclick="sortTable('daily-tbody',5)">TIs w/ ≥1 Issue</th>
+            <th class="num sortable" onclick="sortTable('daily-tbody',6)">Late CI</th>
+            <th class="num sortable" onclick="sortTable('daily-tbody',7)">Low Visits</th>
+            <th class="num sortable" onclick="sortTable('daily-tbody',8)">Zero Leads</th>
+            <th class="num sortable" onclick="sortTable('daily-tbody',9)">Auto CO</th>
+            <th class="num sortable" onclick="sortTable('daily-tbody',10)">Late FV</th>
+            <th class="num sortable" onclick="sortTable('daily-tbody',11)">Low Activity</th>
+            <th class="num sortable" onclick="sortTable('daily-tbody',12)">Offense Rate %</th>
+          </tr></thead>
+          <tbody id="daily-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- OFFENDERS TAB -->
+  <div id="tab-offenders" class="tab-content">
+    <div id="offenders-empty" class="empty">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M6 20v-2a6 6 0 0112 0v2"/></svg>
+      <h3>No data loaded</h3><p>Upload a file to see offender analysis.</p>
+    </div>
+    <div id="offenders-content" style="display:none">
+      <div class="search-row">
+        <input class="search-input" id="ti-search" placeholder="🔍  Search by TI name..." oninput="renderOffenders()">
+        <select class="select-filter" id="off-zone-filter" onchange="renderOffenders()">
+          <option value="all">All Zones</option>
+        </select>
+        <select class="select-filter" id="off-sort" onchange="renderOffenders()">
+          <option value="offense_rate">Sort: Offense Rate</option>
+          <option value="total_offenses">Sort: Total Offenses</option>
+          <option value="late_ci">Sort: Late Check-in</option>
+          <option value="low_visits">Sort: Low Visits</option>
+          <option value="zero_leads">Sort: Zero Leads</option>
+          <option value="auto_co">Sort: Auto Checkout</option>
+          <option value="low_activity">Sort: Low Activity</option>
+          <option value="late_fv">Sort: Late First Visit</option>
+          <option value="name">Sort: Name A-Z</option>
+        </select>
+      </div>
+      <div class="table-wrap table-scroll">
+        <table>
+          <thead><tr>
+            <th>#</th>
+            <th>TI Name</th>
+            <th>Zone</th>
+            <th>Branch</th>
+            <th class="num">Days Active</th>
+            <th class="num">Not CI Days</th>
+            <th class="num">Late CI</th>
+            <th class="num">Low Visits</th>
+            <th class="num">Zero Leads</th>
+            <th class="num">Auto CO</th>
+            <th class="num">Late FV</th>
+            <th class="num">Low Activity</th>
+            <th class="num">Total Offenses</th>
+            <th class="num">Offense Rate %</th>
+          </tr></thead>
+          <tbody id="offenders-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ZONE & BRANCH TAB -->
+  <div id="tab-zones" class="tab-content">
+    <div id="zones-empty" class="empty">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20"/></svg>
+      <h3>No data loaded</h3><p>Upload a file to see zone and branch breakdown.</p>
+    </div>
+    <div id="zones-content" style="display:none">
+      <div class="filter-bar">
+        <span class="filter-label">Date</span>
+        <div class="date-pills" id="date-pills-zones"></div>
+      </div>
+      <div class="section-hdr">Zone-wise Breakdown</div>
+      <div class="table-wrap table-scroll">
+        <table>
+          <thead><tr>
+            <th>Zone</th>
+            <th class="num">Check-ins</th>
+            <th class="num">Not CI</th>
+            <th class="num">Late CI (After 9:30)</th>
+            <th class="num">Late CI (After 10)</th>
+            <th class="num">Low Visits</th>
+            <th class="num">Zero Leads</th>
+            <th class="num">Auto CO</th>
+            <th class="num">Late FV (After 10)</th>
+            <th class="num">Late FV (After 10:30)</th>
+            <th class="num">Low Activity</th>
+            <th class="num">Offense Rate %</th>
+          </tr></thead>
+          <tbody id="zone-detail-tbody"></tbody>
+        </table>
+      </div>
+      <div class="section-hdr">Branch-wise Breakdown</div>
+      <div class="search-row">
+        <select class="select-filter" id="branch-zone-filter" onchange="renderBranches()">
+          <option value="all">All Zones</option>
+        </select>
+      </div>
+      <div class="table-wrap table-scroll">
+        <table>
+          <thead><tr>
+            <th>Zone</th>
+            <th>Branch</th>
+            <th class="num">Unique TIs</th>
+            <th class="num">Check-ins</th>
+            <th class="num">Not CI</th>
+            <th class="num">Late CI</th>
+            <th class="num">Low Visits</th>
+            <th class="num">Zero Leads</th>
+            <th class="num">Auto CO</th>
+            <th class="num">Late FV</th>
+            <th class="num">Low Activity</th>
+            <th class="num">Offense Rate %</th>
+          </tr></thead>
+          <tbody id="branch-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- TRENDS TAB -->
+  <div id="tab-trends" class="tab-content">
+    <div id="trends-empty" class="empty">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      <h3>No data loaded</h3><p>Upload files across multiple dates to see weekly & monthly trends.</p>
+    </div>
+    <div id="trends-content" style="display:none">
+      <div class="filter-bar">
+        <span class="filter-label">View</span>
+        <div class="period-toggle">
+          <button class="period-btn active" onclick="setPeriod('weekly',this)">Weekly</button>
+          <button class="period-btn" onclick="setPeriod('monthly',this)">Monthly</button>
+        </div>
+        <select class="select-filter" id="trend-zone-filter" onchange="renderTrends()">
+          <option value="all">All Zones</option>
+        </select>
+      </div>
+      <div class="trend-grid" id="trend-charts"></div>
+      <div class="section-hdr">Day-wise Trend Table</div>
+      <div class="table-wrap table-scroll">
+        <table>
+          <thead><tr>
+            <th>Date</th>
+            <th class="num">Active TIs</th>
+            <th class="num">% Not CI</th>
+            <th class="num">% Late CI</th>
+            <th class="num">% Low Visits</th>
+            <th class="num">% Zero Leads</th>
+            <th class="num">% Auto CO</th>
+            <th class="num">% Late FV</th>
+            <th class="num">% Low Act</th>
+            <th class="num">Offense Rate %</th>
+          </tr></thead>
+          <tbody id="trend-tbody"></tbody>
+        </table>
+      </div>
+      <div class="section-hdr">Serial Offenders (≥50% Offense Rate)</div>
+      <div class="table-wrap table-scroll">
+        <table>
+          <thead><tr>
+            <th>#</th><th>TI Name</th><th>Zone</th><th>Branch</th>
+            <th class="num">Days Present</th>
+            <th class="num">Offense Rate %</th>
+            <th class="num">Worst Offense</th>
+          </tr></thead>
+          <tbody id="serial-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════
+let allData = [];           // raw parsed rows
+let selectedDates = {};     // tab -> Set of selected date strings
+let sortStates = {};        // table-id -> {col, asc}
+let currentPeriod = 'weekly';
+
+const T930  = [9,30];
+const T10   = [10,0];
+const T1030 = [10,30];
+const T11   = [11,0];
+
+// ═══════════════════════════════════════════════════════
+// TIME UTILS
+// ═══════════════════════════════════════════════════════
+function parseTime(v){
+  if(!v || v==='' ) return null;
+  if(typeof v === 'number'){
+    // Excel time fraction
+    const total = Math.round(v * 86400);
+    return [Math.floor(total/3600), Math.floor((total%3600)/60), total%60];
+  }
+  const s = String(v).trim();
+  const m = s.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  if(m) return [+m[1],+m[2],+(m[3]||0)];
+  return null;
+}
+
+function timeCmp(t, ref){
+  if(!t) return -1;
+  if(t[0]!==ref[0]) return t[0]-ref[0];
+  return t[1]-ref[1];
+}
+
+function timeAfter(t, ref){ return t && timeCmp(t,ref)>0; }
+function timeAtOrBefore(t, ref){ return t && timeCmp(t,ref)<=0; }
+
+function fmtTime(t){
+  if(!t) return '';
+  return `${String(t[0]).padStart(2,'0')}:${String(t[1]).padStart(2,'0')}`;
+}
+
+// ═══════════════════════════════════════════════════════
+// FILE UPLOAD & PARSE
+// ═══════════════════════════════════════════════════════
+function handleFileUpload(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const wb = XLSX.read(ev.target.result, {type:'array', cellDates:false});
+      let parsed = [];
+      wb.SheetNames.forEach(sn => {
+        const ws = wb.Sheets[sn];
+        const rows = XLSX.utils.sheet_to_json(ws, {raw:true, defval:null});
+        rows.forEach(r => parsed.push(normalizeRow(r)));
+      });
+      parsed = parsed.filter(r => r.date);
+      if(!parsed.length){ showToast('No valid data found in file.','error'); return; }
+
+      // Merge with existing (avoid duplicates by name+date)
+      const existing = new Set(allData.map(r=>`${r.date}__${r.name}`));
+      let added = 0;
+      parsed.forEach(r => {
+        const key = `${r.date}__${r.name}`;
+        if(!existing.has(key)){ allData.push(r); added++; existing.add(key); }
+      });
+
+      const dates = [...new Set(parsed.map(r=>r.date))].sort();
+      updateDataInfo();
+      initAllTabs();
+      showToast(`✓ Loaded ${added} records across ${dates.length} date(s)`,'success');
+      document.getElementById('overview-empty').style.display='none';
+      document.getElementById('overview-content').style.display='block';
+    } catch(err){
+      showToast('Error reading file: '+err.message,'error');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+  e.target.value='';
+}
+
+function normalizeRow(r){
+  // Find columns flexibly
+  const get = (...keys) => {
+    for(const k of keys){
+      const found = Object.keys(r).find(rk=>rk.trim().toLowerCase()===k.toLowerCase());
+      if(found && r[found]!=null) return r[found];
+    }
+    return null;
+  };
+
+  // Date
+  let dateRaw = get('date','Date','Day-Month','day-month');
+  let dateStr = '';
+  if(dateRaw!=null){
+    if(typeof dateRaw==='number'){
+      // Excel serial date
+      const d = new Date(Math.round((dateRaw-25569)*86400*1000));
+      dateStr = d.toISOString().slice(0,10);
+    } else {
+      const d = new Date(dateRaw);
+      if(!isNaN(d)) dateStr = d.toISOString().slice(0,10);
+      else dateStr = String(dateRaw).trim();
+    }
+  }
+
+  const checkinRaw = get('CheckinTime','Check-In','checkintime','check-in','checkin');
+  const checkin = parseTime(checkinRaw);
+  const active = checkin !== null;
+
+  const fvRaw = get('First Visit Time','FirstVisit','first visit time','first visit');
+  const fv = parseTime(fvRaw);
+
+  const actHrs = (() => {
+    const v = get('Activity Hours','ActivityHrs','activity hours');
+    if(v==null) return null;
+    if(typeof v==='number') return v;
+    // might be time string
+    const t = parseTime(v);
+    if(t) return t[0]+t[1]/60;
+    return null;
+  })();
+
+  const checkoutFlag = String(get('Checkin / Checkout Flag','CheckoutFlag','checkout flag')||'').trim();
+  const autoCheckout = active && checkoutFlag.toLowerCase().includes('auto');
+
+  const visits = get('Visits','Visit','visits');
+  const leads  = get('Leads created','Leads','leads created');
+
+  // Offenses (only for active)
+  const off_lateCI_930  = active && timeAfter(checkin, T930);
+  const off_lateCI_10   = active && timeAfter(checkin, T10);
+  const off_lowVisits   = active && (visits==null || +visits<5);
+  const off_zeroLeads   = active && (leads==null || +leads===0);
+  const off_autoCheckout= autoCheckout;
+  const off_lateFV_10   = active && fv!=null && timeAfter(fv, T10);
+  const off_lateFV_1030 = active && fv!=null && timeAfter(fv, T1030);
+  const off_lowActivity = active && (actHrs==null || actHrs<5);
+
+  const offenseCount = [off_lateCI_10,off_lowVisits,off_zeroLeads,off_autoCheckout,off_lateFV_1030,off_lowActivity].filter(Boolean).length;
+
+  return {
+    date: dateStr,
+    zone: String(get('Zone','zone')||'Unknown').trim(),
+    branch: String(get('Branch','branch')||'Unknown').trim(),
+    name: String(get('Name','name')||'').trim(),
+    tiCode: get('TI Code','TI code'),
+    checkin, active, fv, actHrs, visits, leads, autoCheckout,
+    off_lateCI_930, off_lateCI_10,
+    off_lowVisits, off_zeroLeads, off_autoCheckout,
+    off_lateFV_10, off_lateFV_1030, off_lowActivity,
+    offenseCount
+  };
+}
+
+// ═══════════════════════════════════════════════════════
+// UTILITY
+// ═══════════════════════════════════════════════════════
+function pct(n,d){ return d===0?0:+(n/d*100).toFixed(1); }
+function fmtPct(n,d){ return pct(n,d)+'%'; }
+
+function rateColor(p){
+  if(p>=60) return 'var(--red)';
+  if(p>=35) return 'var(--orange)';
+  return 'var(--green)';
+}
+function rateBadge(p){
+  if(p>=60) return 'badge-red';
+  if(p>=35) return 'badge-orange';
+  return 'badge-green';
+}
+
+function getDates(){ return [...new Set(allData.map(r=>r.date))].sort(); }
+function getZones(){ return [...new Set(allData.map(r=>r.zone))].sort(); }
+
+function getFilteredData(tab){
+  const sel = selectedDates[tab];
+  if(!sel || sel.size===0) return allData;
+  return allData.filter(r=>sel.has(r.date));
+}
+
+function updateDataInfo(){
+  const dates = getDates();
+  document.getElementById('data-info').textContent =
+    `${allData.length} records · ${dates.length} day(s) · ${[...new Set(allData.map(r=>r.name))].length} TIs`;
+}
+
+function showToast(msg, type='success'){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast ${type} show`;
+  setTimeout(()=>t.className='toast',3000);
+}
+
+// ═══════════════════════════════════════════════════════
+// DATE PILLS
+// ═══════════════════════════════════════════════════════
+function renderDatePills(containerId, tab, onSelect){
+  const dates = getDates();
+  const container = document.getElementById(containerId);
+  if(!selectedDates[tab]) selectedDates[tab] = new Set(dates); // default: all selected
+
+  // Add "All" pill
+  let html = `<div class="date-pill ${selectedDates[tab].size===dates.length?'active':''}" onclick="selectAllDates('${tab}','${containerId}')">All</div>`;
+  dates.forEach(d=>{
+    const label = new Date(d+'T00:00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short'});
+    const active = selectedDates[tab].has(d)?'active':'';
+    html += `<div class="date-pill ${active}" onclick="toggleDate('${tab}','${containerId}','${d}')">${label}</div>`;
+  });
+  container.innerHTML = html;
+}
+
+function toggleDate(tab, containerId, date){
+  if(!selectedDates[tab]) selectedDates[tab] = new Set(getDates());
+  if(selectedDates[tab].has(date)){
+    if(selectedDates[tab].size>1) selectedDates[tab].delete(date);
+  } else {
+    selectedDates[tab].add(date);
+  }
+  renderDatePills(containerId, tab);
+  refreshTab(tab);
+}
+
+function selectAllDates(tab, containerId){
+  selectedDates[tab] = new Set(getDates());
+  renderDatePills(containerId, tab);
+  refreshTab(tab);
+}
+
+function refreshTab(tab){
+  if(tab==='overview') renderOverview();
+  if(tab==='daily') renderDaily();
+  if(tab==='zones') renderZones();
+}
+
+// ═══════════════════════════════════════════════════════
+// INIT ALL TABS
+// ═══════════════════════════════════════════════════════
+function initAllTabs(){
+  const dates = getDates();
+  const zones = getZones();
+
+  // Init selected dates (all by default)
+  ['overview','daily','zones'].forEach(t=>{ selectedDates[t]=new Set(dates); });
+
+  // Date pills
+  renderDatePills('date-pills-overview','overview');
+  renderDatePills('date-pills-daily','daily');
+  renderDatePills('date-pills-zones','zones');
+
+  // Zone dropdowns
+  ['daily-zone-filter','off-zone-filter','branch-zone-filter','trend-zone-filter'].forEach(id=>{
+    const el = document.getElementById(id);
+    el.innerHTML = '<option value="all">All Zones</option>';
+    zones.forEach(z=>{ const o=document.createElement('option');o.value=z;o.textContent=z;el.appendChild(o); });
+  });
+
+  // Show content, hide empty
+  ['daily','offenders','zones','trends'].forEach(t=>{
+    document.getElementById(`${t}-empty`).style.display='none';
+    document.getElementById(`${t}-content`).style.display='block';
+  });
+
+  renderOverview();
+  renderDaily();
+  renderOffenders();
+  renderZones();
+  renderTrends();
+}
+
+// ═══════════════════════════════════════════════════════
+// OVERVIEW
+// ═══════════════════════════════════════════════════════
+function computeStats(data){
+  const dates = [...new Set(data.map(r=>r.date))];
+  // For "not checked in" we need total roster per date
+  // We use all data (not filtered by active) to get roster
+  const totalRoster = data.length;
+  const active = data.filter(r=>r.active);
+  const n = active.length;
+  const notCI = data.filter(r=>!r.active).length;
+
+  const lateCI930 = active.filter(r=>r.off_lateCI_930).length;
+  const lateCI10  = active.filter(r=>r.off_lateCI_10).length;
+  const lowVis    = active.filter(r=>r.off_lowVisits).length;
+  const zeroLead  = active.filter(r=>r.off_zeroLeads).length;
+  const autoCO    = active.filter(r=>r.off_autoCheckout).length;
+  const lateFV10  = active.filter(r=>r.off_lateFV_10).length;
+  const lateFV1030= active.filter(r=>r.off_lateFV_1030).length;
+  const lowAct    = active.filter(r=>r.off_lowActivity).length;
+
+  // Serial offenders: per TI, offense rate >= 50% across their active days
+  const tiMap = {};
+  data.forEach(r=>{
+    if(!tiMap[r.name]) tiMap[r.name]={active:0,offenses:0};
+    if(r.active){ tiMap[r.name].active++; tiMap[r.name].offenses+=r.offenseCount; }
+  });
+  const serial = Object.values(tiMap).filter(t=>t.active>0 && pct(t.offenses,t.active*6)>=50).length;
+  const totalTIs = Object.keys(tiMap).length;
+
+  return { totalRoster, n, notCI, lateCI930, lateCI10, lowVis, zeroLead, autoCO, lateFV10, lateFV1030, lowAct, serial, totalTIs };
+}
+
+function renderOverview(){
+  const data = getFilteredData('overview');
+  const s = computeStats(data);
+  const n = s.n;
+
+  const tiles = [
+    {label:'Not Checked-in', value:fmtPct(s.notCI,s.totalRoster), sub:`${s.notCI} of ${s.totalRoster} TIs`, color:'var(--text3)', accent:'#607d8b'},
+    {label:'Late Check-in (After 9:30)', value:fmtPct(s.lateCI930,n), sub:`${s.lateCI930} of ${n} checked-in`, color:'var(--orange)', accent:'#f39c12'},
+    {label:'Late Check-in (After 10 AM)', value:fmtPct(s.lateCI10,n), sub:`${s.lateCI10} of ${n} checked-in`, color:'var(--red)', accent:'#e74c3c'},
+    {label:'Late First Visit (After 10 AM)', value:fmtPct(s.lateFV10,n), sub:`${s.lateFV10} of ${n} checked-in`, color:'var(--orange)', accent:'#f39c12'},
+    {label:'Late First Visit (After 10:30)', value:fmtPct(s.lateFV1030,n), sub:`${s.lateFV1030} of ${n} checked-in`, color:'var(--red)', accent:'#e74c3c'},
+    {label:'Auto Checkout', value:fmtPct(s.autoCO,n), sub:`${s.autoCO} of ${n} checked-in`, color:'var(--red)', accent:'#e74c3c'},
+    {label:'Zero Leads', value:fmtPct(s.zeroLead,n), sub:`${s.zeroLead} of ${n} checked-in`, color:'var(--orange)', accent:'#f39c12'},
+    {label:'Low Activity (<5 hrs)', value:fmtPct(s.lowAct,n), sub:`${s.lowAct} of ${n} checked-in`, color:'var(--orange)', accent:'#f39c12'},
+    {label:'Low Visits (<5/day)', value:fmtPct(s.lowVis,n), sub:`${s.lowVis} of ${n} checked-in`, color:'var(--orange)', accent:'#f39c12'},
+    {label:'Serial Offenders (≥50% Rate)', value:s.serial.toString(), sub:`of ${s.totalTIs} total TIs`, color:'var(--red)', accent:'#e74c3c'},
+  ];
+
+  document.getElementById('kpi-grid').innerHTML = tiles.map(t=>`
+    <div class="kpi-card" style="--accent-color:${t.accent}">
+      <div class="kpi-label">${t.label}</div>
+      <div class="kpi-value">${t.value}</div>
+      <div class="kpi-sub">${t.sub}</div>
+    </div>`).join('');
+
+  // Offense table
+  const active = data.filter(r=>r.active);
+  const nn = active.length;
+  const offenses = [
+    ['Late Check-in (After 9:30 AM)', active.filter(r=>r.off_lateCI_930).length],
+    ['Late Check-in (After 10 AM)',   active.filter(r=>r.off_lateCI_10).length],
+    ['Low Visits (<5/day)',           active.filter(r=>r.off_lowVisits).length],
+    ['Zero Leads',                    active.filter(r=>r.off_zeroLeads).length],
+    ['Auto Checkout',                 active.filter(r=>r.off_autoCheckout).length],
+    ['Late First Visit (After 10 AM)',active.filter(r=>r.off_lateFV_10).length],
+    ['Late First Visit (After 10:30)',active.filter(r=>r.off_lateFV_1030).length],
+    ['Low Activity (<5 hrs)',         active.filter(r=>r.off_lowActivity).length],
+  ];
+
+  document.getElementById('offense-tbody').innerHTML = [
+    `<tr class="offense-row"><td colspan="5" style="padding:10px 14px;font-weight:600;color:var(--teal)">Total Checked-in TIs: <span style="font-family:'DM Mono',monospace">${nn}</span></td></tr>`,
+    ...offenses.map(([name,cnt])=>{
+      const p = pct(cnt,nn);
+      const barW = Math.min(p,100);
+      const col = p>=60?'var(--red)':p>=35?'var(--orange)':'var(--green)';
+      return `<tr class="offense-row">
+        <td>${name}</td>
+        <td class="num">${nn}</td>
+        <td class="num"><strong>${cnt}</strong></td>
+        <td class="num" style="color:${col};font-weight:600">${p}%</td>
+        <td><div class="rate-bar"><div class="rate-track"><div class="rate-fill" style="width:${barW}%;background:${col}"></div></div></div></td>
+      </tr>`;
+    })
+  ].join('');
+
+  // Zone summary
+  const zones = [...new Set(data.map(r=>r.zone))].sort();
+  document.getElementById('zone-summary-tbody').innerHTML = zones.map(z=>{
+    const zd = data.filter(r=>r.zone===z);
+    const za = zd.filter(r=>r.active);
+    const zn = za.length;
+    const notCI = zd.filter(r=>!r.active).length;
+    const lCI   = za.filter(r=>r.off_lateCI_10).length;
+    const lV    = za.filter(r=>r.off_lowVisits).length;
+    const zL    = za.filter(r=>r.off_zeroLeads).length;
+    const aCO   = za.filter(r=>r.off_autoCheckout).length;
+    const lFV   = za.filter(r=>r.off_lateFV_1030).length;
+    const lAct  = za.filter(r=>r.off_lowActivity).length;
+    const rate  = pct(lCI+lV+zL+aCO+lFV+lAct, zn*6);
+    const cl = rateBadge(rate);
+    return `<tr>
+      <td class="zone-cell">${z}</td>
+      <td class="num">${zn}</td>
+      <td class="num">${notCI}</td>
+      <td class="num">${lCI} <span style="color:var(--text3);font-size:11px">(${pct(lCI,zn)}%)</span></td>
+      <td class="num">${lV} <span style="color:var(--text3);font-size:11px">(${pct(lV,zn)}%)</span></td>
+      <td class="num">${zL} <span style="color:var(--text3);font-size:11px">(${pct(zL,zn)}%)</span></td>
+      <td class="num">${aCO} <span style="color:var(--text3);font-size:11px">(${pct(aCO,zn)}%)</span></td>
+      <td class="num">${lFV} <span style="color:var(--text3);font-size:11px">(${pct(lFV,zn)}%)</span></td>
+      <td class="num">${lAct} <span style="color:var(--text3);font-size:11px">(${pct(lAct,zn)}%)</span></td>
+      <td class="num"><span class="badge ${cl}">${rate}%</span></td>
+    </tr>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+// DAILY BREAKDOWN
+// ═══════════════════════════════════════════════════════
+function renderDaily(){
+  const zoneFilter = document.getElementById('daily-zone-filter').value;
+  let data = getFilteredData('daily');
+  if(zoneFilter!=='all') data=data.filter(r=>r.zone===zoneFilter);
+
+  const dates = [...new Set(data.map(r=>r.date))].sort();
+  const zones = zoneFilter==='all' ? [...new Set(data.map(r=>r.zone))].sort() : [zoneFilter];
+
+  const rows = [];
+  dates.forEach(d=>{
+    zones.forEach(z=>{
+      const dayZone = data.filter(r=>r.date===d && r.zone===z);
+      if(!dayZone.length) return;
+      const active = dayZone.filter(r=>r.active);
+      const n = active.length;
+      const notCI = dayZone.filter(r=>!r.active).length;
+      const lCI  = active.filter(r=>r.off_lateCI_10).length;
+      const lV   = active.filter(r=>r.off_lowVisits).length;
+      const zL   = active.filter(r=>r.off_zeroLeads).length;
+      const aCO  = active.filter(r=>r.off_autoCheckout).length;
+      const lFV  = active.filter(r=>r.off_lateFV_1030).length;
+      const lAct = active.filter(r=>r.off_lowActivity).length;
+      const withIssue = active.filter(r=>r.offenseCount>0).length;
+      const rate = pct(lCI+lV+zL+aCO+lFV+lAct, n*6);
+      rows.push({d,z,roster:dayZone.length,n,notCI,withIssue,lCI,lV,zL,aCO,lFV,lAct,rate});
+    });
+  });
+
+  const label = d => new Date(d+'T00:00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short',weekday:'short'});
+  document.getElementById('daily-tbody').innerHTML = rows.length ? rows.map(r=>{
+    const cl = rateBadge(r.rate);
+    return `<tr>
+      <td>${label(r.d)}</td>
+      <td class="zone-cell">${r.z}</td>
+      <td class="num">${r.roster}</td>
+      <td class="num">${r.n}</td>
+      <td class="num">${r.notCI}</td>
+      <td class="num">${r.withIssue}</td>
+      <td class="num">${r.lCI}</td>
+      <td class="num">${r.lV}</td>
+      <td class="num">${r.zL}</td>
+      <td class="num">${r.aCO}</td>
+      <td class="num">${r.lFV}</td>
+      <td class="num">${r.lAct}</td>
+      <td class="num"><span class="badge ${cl}">${r.rate}%</span></td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="13" class="no-data-row">No data for selected filters</td></tr>`;
+}
+
+// ═══════════════════════════════════════════════════════
+// OFFENDERS
+// ═══════════════════════════════════════════════════════
+function buildTiStats(){
+  const tiMap = {};
+  allData.forEach(r=>{
+    if(!tiMap[r.name]) tiMap[r.name]={name:r.name,zone:r.zone,branch:r.branch,
+      totalDays:0, activeDays:0, notCIDays:0,
+      lateCI:0,lowVis:0,zeroLeads:0,autoCO:0,lateFV:0,lowAct:0,total:0};
+    const t = tiMap[r.name];
+    t.totalDays++;
+    if(r.active){
+      t.activeDays++;
+      if(r.off_lateCI_10) t.lateCI++;
+      if(r.off_lowVisits)  t.lowVis++;
+      if(r.off_zeroLeads)  t.zeroLeads++;
+      if(r.off_autoCheckout) t.autoCO++;
+      if(r.off_lateFV_1030)  t.lateFV++;
+      if(r.off_lowActivity)  t.lowAct++;
+      t.total += r.offenseCount;
+    } else {
+      t.notCIDays++;
+    }
+  });
+  return Object.values(tiMap).map(t=>({
+    ...t,
+    rate: pct(t.total, t.activeDays*6)
+  }));
+}
+
+function renderOffenders(){
+  const search = document.getElementById('ti-search').value.toLowerCase();
+  const zoneF  = document.getElementById('off-zone-filter').value;
+  const sortBy = document.getElementById('off-sort').value;
+
+  let tis = buildTiStats();
+  if(search) tis=tis.filter(t=>t.name.toLowerCase().includes(search));
+  if(zoneF!=='all') tis=tis.filter(t=>t.zone===zoneF);
+
+  const sortFns = {
+    offense_rate:(a,b)=>b.rate-a.rate,
+    total_offenses:(a,b)=>b.total-a.total,
+    late_ci:(a,b)=>b.lateCI-a.lateCI,
+    low_visits:(a,b)=>b.lowVis-a.lowVis,
+    zero_leads:(a,b)=>b.zeroLeads-a.zeroLeads,
+    auto_co:(a,b)=>b.autoCO-a.autoCO,
+    low_activity:(a,b)=>b.lowAct-a.lowAct,
+    late_fv:(a,b)=>b.lateFV-a.lateFV,
+    name:(a,b)=>a.name.localeCompare(b.name),
+  };
+  tis.sort(sortFns[sortBy]||sortFns.offense_rate);
+
+  document.getElementById('offenders-tbody').innerHTML = tis.length ? tis.map((t,i)=>{
+    const cl = rateBadge(t.rate);
+    return `<tr>
+      <td class="num" style="color:var(--text3)">${i+1}</td>
+      <td style="font-weight:500">${t.name}</td>
+      <td class="zone-cell">${t.zone}</td>
+      <td style="color:var(--text2)">${t.branch}</td>
+      <td class="num">${t.activeDays}</td>
+      <td class="num">${t.notCIDays}</td>
+      <td class="num">${t.lateCI}</td>
+      <td class="num">${t.lowVis}</td>
+      <td class="num">${t.zeroLeads}</td>
+      <td class="num">${t.autoCO}</td>
+      <td class="num">${t.lateFV}</td>
+      <td class="num">${t.lowAct}</td>
+      <td class="num"><strong>${t.total}</strong></td>
+      <td class="num"><span class="badge ${cl}">${t.rate}%</span></td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="14" class="no-data-row">No TIs match your search/filter</td></tr>`;
+}
+
+// ═══════════════════════════════════════════════════════
+// ZONES & BRANCHES
+// ═══════════════════════════════════════════════════════
+function renderZones(){
+  const data = getFilteredData('zones');
+  const zones = [...new Set(data.map(r=>r.zone))].sort();
+
+  document.getElementById('zone-detail-tbody').innerHTML = zones.map(z=>{
+    const zd = data.filter(r=>r.zone===z);
+    const za = zd.filter(r=>r.active);
+    const n = za.length;
+    const notCI = zd.filter(r=>!r.active).length;
+    const lCI930 = za.filter(r=>r.off_lateCI_930).length;
+    const lCI10  = za.filter(r=>r.off_lateCI_10).length;
+    const lV     = za.filter(r=>r.off_lowVisits).length;
+    const zL     = za.filter(r=>r.off_zeroLeads).length;
+    const aCO    = za.filter(r=>r.off_autoCheckout).length;
+    const lFV10  = za.filter(r=>r.off_lateFV_10).length;
+    const lFV1030= za.filter(r=>r.off_lateFV_1030).length;
+    const lAct   = za.filter(r=>r.off_lowActivity).length;
+    const rate   = pct(lCI10+lV+zL+aCO+lFV1030+lAct, n*6);
+    const cl = rateBadge(rate);
+    const c = (v,d)=>`${v} <span style="color:var(--text3);font-size:10px">(${pct(v,d||n)}%)</span>`;
+    return `<tr>
+      <td class="zone-cell">${z}</td>
+      <td class="num">${n}</td>
+      <td class="num">${notCI}</td>
+      <td class="num">${c(lCI930)}</td>
+      <td class="num">${c(lCI10)}</td>
+      <td class="num">${c(lV)}</td>
+      <td class="num">${c(zL)}</td>
+      <td class="num">${c(aCO)}</td>
+      <td class="num">${c(lFV10)}</td>
+      <td class="num">${c(lFV1030)}</td>
+      <td class="num">${c(lAct)}</td>
+      <td class="num"><span class="badge ${cl}">${rate}%</span></td>
+    </tr>`;
+  }).join('');
+
+  renderBranches();
+}
+
+function renderBranches(){
+  const zoneF = document.getElementById('branch-zone-filter').value;
+  const data = getFilteredData('zones');
+  const filtered = zoneF==='all' ? data : data.filter(r=>r.zone===zoneF);
+
+  const branches = {};
+  filtered.forEach(r=>{
+    const key = `${r.zone}||${r.branch}`;
+    if(!branches[key]) branches[key]={zone:r.zone,branch:r.branch,tis:new Set(),total:0,active:0,
+      notCI:0,lCI:0,lV:0,zL:0,aCO:0,lFV:0,lAct:0};
+    const b = branches[key];
+    b.tis.add(r.name); b.total++;
+    if(r.active){ b.active++; if(r.off_lateCI_10)b.lCI++; if(r.off_lowVisits)b.lV++; if(r.off_zeroLeads)b.zL++; if(r.off_autoCheckout)b.aCO++; if(r.off_lateFV_1030)b.lFV++; if(r.off_lowActivity)b.lAct++; }
+    else b.notCI++;
+  });
+
+  const sorted = Object.values(branches).sort((a,b)=>a.zone.localeCompare(b.zone)||b.active-a.active);
+  let prevZone='';
+  document.getElementById('branch-tbody').innerHTML = sorted.map(b=>{
+    const n=b.active;
+    const rate=pct(b.lCI+b.lV+b.zL+b.aCO+b.lFV+b.lAct,n*6);
+    const cl=rateBadge(rate);
+    const zoneBreak = b.zone!==prevZone;
+    prevZone=b.zone;
+    const c=(v)=>`${v} <span style="color:var(--text3);font-size:10px">(${pct(v,n||1)}%)</span>`;
+    return `<tr style="${zoneBreak?'border-top:2px solid var(--border)':''}">
+      <td class="zone-cell">${b.zone}</td>
+      <td style="color:var(--text)">${b.branch}</td>
+      <td class="num">${b.tis.size}</td>
+      <td class="num">${n}</td>
+      <td class="num">${b.notCI}</td>
+      <td class="num">${c(b.lCI)}</td>
+      <td class="num">${c(b.lV)}</td>
+      <td class="num">${c(b.zL)}</td>
+      <td class="num">${c(b.aCO)}</td>
+      <td class="num">${c(b.lFV)}</td>
+      <td class="num">${c(b.lAct)}</td>
+      <td class="num"><span class="badge ${cl}">${rate}%</span></td>
+    </tr>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+// TRENDS
+// ═══════════════════════════════════════════════════════
+function setPeriod(period, btn){
+  currentPeriod=period;
+  document.querySelectorAll('.period-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderTrends();
+}
+
+function renderTrends(){
+  const zoneF = document.getElementById('trend-zone-filter').value;
+  let data = zoneF==='all'?allData:allData.filter(r=>r.zone===zoneF);
+
+  const dates = [...new Set(data.map(r=>r.date))].sort();
+  if(!dates.length) return;
+
+  // Group by week or month
+  function getGroup(d){
+    const dt = new Date(d+'T00:00:00');
+    if(currentPeriod==='monthly'){
+      return dt.toLocaleDateString('en-IN',{month:'short',year:'numeric'});
+    }
+    // ISO week
+    const jan4 = new Date(dt.getFullYear(),0,4);
+    const week = Math.ceil(((dt-jan4)/86400000+jan4.getDay()+1)/7);
+    return `W${week} ${dt.getFullYear()}`;
+  }
+
+  // Day-wise trend table
+  document.getElementById('trend-tbody').innerHTML = dates.map(d=>{
+    const dayData = data.filter(r=>r.date===d);
+    const active = dayData.filter(r=>r.active);
+    const n=active.length;
+    const roster=dayData.length;
+    const notCI=dayData.filter(r=>!r.active).length;
+    const lCI=active.filter(r=>r.off_lateCI_10).length;
+    const lV=active.filter(r=>r.off_lowVisits).length;
+    const zL=active.filter(r=>r.off_zeroLeads).length;
+    const aCO=active.filter(r=>r.off_autoCheckout).length;
+    const lFV=active.filter(r=>r.off_lateFV_1030).length;
+    const lAct=active.filter(r=>r.off_lowActivity).length;
+    const rate=pct(lCI+lV+zL+aCO+lFV+lAct,n*6);
+    const label=new Date(d+'T00:00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short',weekday:'short'});
+    const cl=rateBadge(rate);
+    const p=(v)=>`<span style="color:${rateColor(pct(v,n))}">${pct(v,n)}%</span>`;
+    return `<tr>
+      <td style="font-weight:500">${label}</td>
+      <td class="num">${n}</td>
+      <td class="num">${p(notCI)}</td>
+      <td class="num">${p(lCI)}</td>
+      <td class="num">${p(lV)}</td>
+      <td class="num">${p(zL)}</td>
+      <td class="num">${p(aCO)}</td>
+      <td class="num">${p(lFV)}</td>
+      <td class="num">${p(lAct)}</td>
+      <td class="num"><span class="badge ${cl}">${rate}%</span></td>
+    </tr>`;
+  }).join('');
+
+  // Grouped bar charts
+  const groups = {};
+  dates.forEach(d=>{
+    const g=getGroup(d);
+    if(!groups[g]) groups[g]={g,n:0,lCI:0,lV:0,zL:0,aCO:0,lFV:0,lAct:0};
+    const gd=groups[g];
+    const active=data.filter(r=>r.date===d&&r.active);
+    gd.n+=active.length;
+    gd.lCI+=active.filter(r=>r.off_lateCI_10).length;
+    gd.lV+=active.filter(r=>r.off_lowVisits).length;
+    gd.zL+=active.filter(r=>r.off_zeroLeads).length;
+    gd.aCO+=active.filter(r=>r.off_autoCheckout).length;
+    gd.lFV+=active.filter(r=>r.off_lateFV_1030).length;
+    gd.lAct+=active.filter(r=>r.off_lowActivity).length;
+  });
+
+  const gArr = Object.values(groups);
+  const metrics = [
+    {key:'lCI',label:'Late Check-in',color:'#e74c3c'},
+    {key:'lV', label:'Low Visits',   color:'#f39c12'},
+    {key:'zL', label:'Zero Leads',   color:'#e67e22'},
+    {key:'aCO',label:'Auto Checkout',color:'#c0392b'},
+    {key:'lFV',label:'Late 1st Visit',color:'#d35400'},
+    {key:'lAct',label:'Low Activity', color:'#8e44ad'},
+  ];
+
+  document.getElementById('trend-charts').innerHTML = metrics.map(m=>{
+    const maxPct = Math.max(...gArr.map(g=>pct(g[m.key],g.n)),1);
+    const bars = gArr.map(g=>{
+      const p=pct(g[m.key],g.n);
+      const w=Math.round(p/maxPct*100);
+      return `<div class="bar-row">
+        <div class="bar-name" title="${g.g}">${g.g}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:${w}%;background:${m.color}">${p}%</div></div>
+        <div class="bar-val">${g[m.key]}</div>
+      </div>`;
+    }).join('');
+    return `<div class="chart-card">
+      <div class="chart-title">${m.label} — ${currentPeriod==='weekly'?'Weekly':'Monthly'} Trend</div>
+      <div class="bar-chart">${bars}</div>
+    </div>`;
+  }).join('');
+
+  // Serial offenders
+  const tis = buildTiStats().filter(t=>t.rate>=50).sort((a,b)=>b.rate-a.rate);
+  const worstOff = t=>{
+    const cats = [{k:'lateCI',l:'Late CI'},{k:'lowVis',l:'Low Visits'},{k:'zeroLeads',l:'Zero Leads'},
+                  {k:'autoCO',l:'Auto CO'},{k:'lateFV',l:'Late FV'},{k:'lowAct',l:'Low Activity'}];
+    const best = cats.sort((a,b)=>t[b.k]-t[a.k])[0];
+    return `${best.l} (${t[best.k]}x)`;
+  };
+  document.getElementById('serial-tbody').innerHTML = tis.length ? tis.map((t,i)=>`
+    <tr>
+      <td class="num" style="color:var(--text3)">${i+1}</td>
+      <td style="font-weight:500">${t.name}</td>
+      <td class="zone-cell">${t.zone}</td>
+      <td style="color:var(--text2)">${t.branch}</td>
+      <td class="num">${t.activeDays}</td>
+      <td class="num"><span class="badge badge-red">${t.rate}%</span></td>
+      <td>${worstOff(t)}</td>
+    </tr>`).join('') : `<tr><td colspan="7" class="no-data-row">Not enough data — upload more dates to identify serial offenders</td></tr>`;
+}
+
+// ═══════════════════════════════════════════════════════
+// SORT TABLE
+// ═══════════════════════════════════════════════════════
+function sortTable(tbodyId, colIdx){
+  const tbody = document.getElementById(tbodyId);
+  if(!tbody) return;
+  const rows = [...tbody.querySelectorAll('tr')];
+  const state = sortStates[tbodyId] || {col:-1,asc:true};
+  const asc = state.col===colIdx ? !state.asc : true;
+  sortStates[tbodyId]={col:colIdx,asc};
+
+  rows.sort((a,b)=>{
+    const av=a.cells[colIdx]?.innerText.replace('%','').trim()||'';
+    const bv=b.cells[colIdx]?.innerText.replace('%','').trim()||'';
+    const an=parseFloat(av), bn=parseFloat(bv);
+    if(!isNaN(an)&&!isNaN(bn)) return asc?an-bn:bn-an;
+    return asc?av.localeCompare(bv):bv.localeCompare(av);
+  });
+  rows.forEach(r=>tbody.appendChild(r));
+
+  // Update header indicators
+  const thead = tbody.closest('table').querySelector('thead');
+  if(thead){
+    [...thead.querySelectorAll('th')].forEach((th,i)=>{
+      th.classList.remove('sort-asc','sort-desc');
+      if(i===colIdx) th.classList.add(asc?'sort-asc':'sort-desc');
+    });
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// TAB SWITCHING
+// ═══════════════════════════════════════════════════════
+function switchTab(name, el){
+  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById(`tab-${name}`).classList.add('active');
+  el.classList.add('active');
+}
+
+// Drag-over upload
+document.addEventListener('dragover',e=>{e.preventDefault();document.querySelectorAll('.upload-zone').forEach(z=>z.classList.add('drag-over'));});
+document.addEventListener('dragleave',()=>document.querySelectorAll('.upload-zone').forEach(z=>z.classList.remove('drag-over')));
+document.addEventListener('drop',e=>{
+  e.preventDefault();
+  document.querySelectorAll('.upload-zone').forEach(z=>z.classList.remove('drag-over'));
+  const file=e.dataTransfer.files[0];
+  if(file&&(file.name.endsWith('.xlsx')||file.name.endsWith('.xls'))){
+    const dt=new DataTransfer();dt.items.add(file);
+    document.getElementById('file-input').files=dt.files;
+    handleFileUpload({target:{files:dt.files,value:''}});
+  }
+});
+</script>
+</body>
+</html>
