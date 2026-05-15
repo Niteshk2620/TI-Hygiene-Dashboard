@@ -597,7 +597,16 @@ function handleFileUpload(e){
 }
  
 function normalizeRow(r){
-  // Find columns flexibly
+  // Find columns flexibly — returns the raw value including null/0
+  // Use getVal (not get) so we can distinguish null from missing key
+  const getVal = (...keys) => {
+    for(const k of keys){
+      const found = Object.keys(r).find(rk=>rk.trim().toLowerCase()===k.toLowerCase());
+      if(found !== undefined) return r[found]; // return even if null/0
+    }
+    return undefined; // key not found at all
+  };
+  // get() still skips null — used for non-numeric fields where null = absent
   const get = (...keys) => {
     for(const k of keys){
       const found = Object.keys(r).find(rk=>rk.trim().toLowerCase()===k.toLowerCase());
@@ -629,30 +638,41 @@ function normalizeRow(r){
   const fv = parseTime(fvRaw);
  
   const actHrs = (() => {
-    const v = get('Activity Hours','ActivityHrs','activity hours');
-    if(v==null) return null;
-    if(typeof v==='number') return v;
-    // might be time string
-    const t = parseTime(v);
-    if(t) return t[0]+t[1]/60;
+    const v = getVal('Activity Hours','ActivityHrs','activity hours');
+    if(v==null) return null;                      // null/undefined = not recorded
+    if(typeof v==='number'){
+      // Excel stores time-of-day as a day fraction (e.g. 6:54 = 0.2875)
+      // Must multiply by 24 to get hours
+      if(v > 0 && v < 1) return v * 24;
+      return v;
+    }
+    const t = parseTime(String(v));
+    if(t) return t[0] + t[1]/60 + (t[2]||0)/3600;
     return null;
   })();
  
   const checkoutFlag = String(get('Checkin / Checkout Flag','CheckoutFlag','checkout flag')||'').trim();
   const autoCheckout = active && checkoutFlag.toLowerCase().includes('auto');
  
-  const visits = get('Visits','Visit','visits');
-  const leads  = get('Leads created','Leads','leads created');
+  // Use getVal so empty cells (null) are NOT coerced to 0
+  const visitsRaw = getVal('Visits','Visit','visits');
+  // null/undefined = not recorded → don't flag. Convert to number only if present.
+  const visits = (visitsRaw != null && visitsRaw !== '') ? +visitsRaw : null;
+ 
+  const leadsRaw = getVal('Leads created','Leads','leads created');
+  const leads  = (leadsRaw  != null && leadsRaw  !== '') ? +leadsRaw  : null;
  
   // Offenses (only for active)
   const off_lateCI_930  = active && timeAfter(checkin, T930);
   const off_lateCI_10   = active && timeAfter(checkin, T10);
-  const off_lowVisits   = active && (visits==null || +visits<5);
-  const off_zeroLeads   = active && (leads==null || +leads===0);
+  // NULL visits = checked in but no visits recorded = flag as low visits
+  const off_lowVisits   = active && (visits==null || isNaN(visits) || visits<5);
+  const off_zeroLeads   = active && (leads==null || isNaN(leads) || +leads===0);
   const off_autoCheckout= autoCheckout;
   const off_lateFV_10   = active && fv!=null && timeAfter(fv, T10);
   const off_lateFV_1030 = active && fv!=null && timeAfter(fv, T1030);
-  const off_lowActivity = active && (actHrs==null || actHrs<5);
+  // NULL activity = data not recorded, do NOT flag as an offense
+  const off_lowActivity = active && actHrs!=null && actHrs<5;
  
   const offenseCount = [off_lateCI_10,off_lowVisits,off_zeroLeads,off_autoCheckout,off_lateFV_1030,off_lowActivity].filter(Boolean).length;
  
@@ -715,27 +735,28 @@ function showToast(msg, type='success'){
 function renderDatePills(containerId, tab, onSelect){
   const dates = getDates();
   const container = document.getElementById(containerId);
-  if(!selectedDates[tab]) selectedDates[tab] = new Set(dates); // default: all selected
+  if(!selectedDates[tab]) selectedDates[tab] = new Set(dates);
  
-  // Add "All" pill
-  let html = `<div class="date-pill ${selectedDates[tab].size===dates.length?'active':''}" onclick="selectAllDates('${tab}','${containerId}')">All</div>`;
+  const allSelected = selectedDates[tab].size === dates.length;
+  let html = `<div class="date-pill ${allSelected?'active':''}" onclick="selectAllDates('${tab}','${containerId}')">All</div>`;
   dates.forEach(d=>{
     const label = new Date(d+'T00:00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short'});
-    const active = selectedDates[tab].has(d)?'active':'';
-    html += `<div class="date-pill ${active}" onclick="toggleDate('${tab}','${containerId}','${d}')">${label}</div>`;
+    const active = selectedDates[tab].has(d) && !allSelected ? 'active' : '';
+    html += `<div class="date-pill ${active}" onclick="selectSingleDate('${tab}','${containerId}','${d}')">${label}</div>`;
   });
   container.innerHTML = html;
 }
  
-function toggleDate(tab, containerId, date){
-  if(!selectedDates[tab]) selectedDates[tab] = new Set(getDates());
-  if(selectedDates[tab].has(date)){
-    if(selectedDates[tab].size>1) selectedDates[tab].delete(date);
-  } else {
-    selectedDates[tab].add(date);
-  }
+function selectSingleDate(tab, containerId, date){
+  // Single click = show ONLY that date
+  selectedDates[tab] = new Set([date]);
   renderDatePills(containerId, tab);
   refreshTab(tab);
+}
+ 
+function toggleDate(tab, containerId, date){
+  // Keep for backward compat but now unused
+  selectSingleDate(tab, containerId, date);
 }
  
 function selectAllDates(tab, containerId){
