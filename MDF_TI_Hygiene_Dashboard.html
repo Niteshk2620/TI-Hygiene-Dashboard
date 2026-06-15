@@ -513,6 +513,10 @@ tbody tr:hover .sticky-col{background:#1e3048;}
             <th class="num">Checkout</th>
             <th class="num sortable" onclick="sortTable('tid-tbody',11)">Issues Today</th>
             <th>Flags</th>
+            <th class="num sortable" onclick="sortTable('tid-tbody',13)">Last Visit Time</th>
+            <th class="sortable" onclick="sortTable('tid-tbody',14)">GS Registered Date</th>
+            <th class="sortable" onclick="sortTable('tid-tbody',15)">GS Login Date</th>
+            <th class="sortable" onclick="sortTable('tid-tbody',16)">Scanned Date</th>
           </tr></thead>
           <tbody id="tid-tbody"></tbody>
         </table>
@@ -697,6 +701,27 @@ function normalizeRow(r){
   const leadsRaw = getVal('Leads created','Leads','leads created');
   const leads  = (leadsRaw  != null && leadsRaw  !== '') ? +leadsRaw  : null;
 
+  // ── New columns: Last Visit Time, GS Registered Date, GS login date, Scanned date ──
+  const lastVisitRaw = get('Last Visit','LastVisit','last visit','last visit time');
+  const lastVisit = parseTime(lastVisitRaw);
+
+  const parseExcelDate = (raw) => {
+    if(raw==null || raw==='') return null;
+    if(typeof raw==='number'){
+      // Excel serial date
+      const d = new Date(Math.round((raw-25569)*86400*1000));
+      if(isNaN(d)) return null;
+      return d.toISOString().slice(0,10);
+    }
+    const d = new Date(raw);
+    if(!isNaN(d)) return d.toISOString().slice(0,10);
+    return String(raw).trim();
+  };
+
+  const gsRegDate    = parseExcelDate(getVal('GS Registered Date','GS Registered date','gs registered date'));
+  const gsLoginDate  = parseExcelDate(getVal('GS login date','GS Login Date','gs login date'));
+  const scannedDate  = parseExcelDate(getVal('Scanned date','Scanned Date','scanned date'));
+
   // Offenses (only for active)
   const off_lateCI_10   = active && timeAfter(checkin, T10);
   // NULL visits = checked in but no visits recorded = flag as low visits
@@ -717,6 +742,7 @@ function normalizeRow(r){
     name: String(get('Name','name')||'').trim(),
     tiCode: get('TI Code','TI code'),
     checkin, active, fv, actHrs, visits, leads, autoCheckout,
+    lastVisit, gsRegDate, gsLoginDate, scannedDate,
     off_lateCI_10,
     off_lowVisits, off_zeroLeads, off_autoCheckout,
     off_lateFV_10, off_lateFV_1030, off_lowActivity,
@@ -1731,6 +1757,7 @@ function renderTIDetail(){
       {weekday:'short',day:'numeric',month:'short'});
 
     if(!r.active){
+      const fmtDate = ds => ds ? new Date(ds+'T00:00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}) : '—';
       return `<tr style="opacity:.5">
         <td style="font-weight:500">${dateLabel}</td>
         <td class="zone-cell">${r.zone}</td>
@@ -1739,6 +1766,10 @@ function renderTIDetail(){
         <td class="num"><span class="badge badge-grey">Absent</span></td>
         <td class="num" colspan="7" style="color:var(--text3);text-align:center">Not checked in</td>
         <td></td>
+        <td class="num" style="font-family:'DM Mono',monospace">${fmt(r.lastVisit)}</td>
+        <td>${fmtDate(r.gsRegDate)}</td>
+        <td>${fmtDate(r.gsLoginDate)}</td>
+        <td>${fmtDate(r.scannedDate)}</td>
       </tr>`;
     }
 
@@ -1764,6 +1795,8 @@ function renderTIDetail(){
     const leads  = r.leads!=null?r.leads:'—';
     const actHrs = r.actHrs!=null?r.actHrs.toFixed(1)+'h':'—';
 
+    const fmtDate = ds => ds ? new Date(ds+'T00:00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}) : '—';
+
     return `<tr>
       <td style="font-weight:500;white-space:nowrap">${dateLabel}</td>
       <td class="zone-cell">${r.zone}</td>
@@ -1778,8 +1811,12 @@ function renderTIDetail(){
       <td class="num" style="color:${coColor};font-size:11px">${r.autoCheckout?'Auto':'Manual'}</td>
       <td class="num" style="color:${issueColor};font-weight:700">${r.offenseCount}</td>
       <td style="white-space:nowrap">${flags.join(' ')}</td>
+      <td class="num" style="font-family:'DM Mono',monospace">${fmt(r.lastVisit)}</td>
+      <td style="white-space:nowrap">${fmtDate(r.gsRegDate)}</td>
+      <td style="white-space:nowrap">${fmtDate(r.gsLoginDate)}</td>
+      <td style="white-space:nowrap">${fmtDate(r.scannedDate)}</td>
     </tr>`;
-  }).join('') : `<tr><td colspan="13" class="no-data-row">No records match your filters</td></tr>`;
+  }).join('') : `<tr><td colspan="17" class="no-data-row">No records match your filters</td></tr>`;
 }
 
 // Show export button once data is loaded (called inside initAllTabs)
